@@ -1,0 +1,10 @@
+name = "cookie-login-worker"
+main = "worker.js"
+compatibility_date = "2024-06-01"
+
+[[kv_namespaces]]
+binding = "COOKIE_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# 密钥不要写这里，使用命令：
+# wrangler secret put SECRET

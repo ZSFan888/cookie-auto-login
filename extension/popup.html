@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cookie 自动登录</title>
+<style>
+:root,[data-theme="light"]{
+  --bg:#f7f6f2;--surface:#f0efeb;--surface-2:#e8e7e2;
+  --border:rgba(0,0,0,0.08);--border-s:rgba(0,0,0,0.14);
+  --text:#1a1916;--muted:#6b6a66;--faint:#aaa9a5;
+  --primary:#01696f;--primary-h:#0c4e54;--primary-dim:rgba(1,105,111,0.12);
+  --success:#2e6b12;--success-bg:rgba(46,107,18,0.10);
+  --error:#991a5e;--error-bg:rgba(153,26,94,0.10);
+  --warn:#7a3510;--warn-bg:rgba(122,53,16,0.10);
+  --info:#00587a;--info-bg:rgba(0,88,122,0.10);
+  --shadow:0 2px 8px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.05);
+  --shadow-lg:0 8px 24px rgba(0,0,0,0.12);
+  --r:6px;--r-sm:4px;--r-lg:10px;--r-pill:999px;
+  --tr:160ms cubic-bezier(.16,1,.3,1);
+  --font:system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Fira Code','JetBrains Mono','Consolas',monospace;
+}
+[data-theme="dark"]{
+  --bg:#111110;--surface:#1a1916;--surface-2:#222120;
+  --border:rgba(255,255,255,0.07);--border-s:rgba(255,255,255,0.12);
+  --text:#d4d3cf;--muted:#6e6d69;--faint:#3d3c39;
+  --primary:#3d9ea8;--primary-h:#2b8890;--primary-dim:rgba(61,158,168,0.14);
+  --success:#5a9e38;--success-bg:rgba(90,158,56,0.12);
+  --error:#c45fa0;--error-bg:rgba(196,95,160,0.12);
+  --warn:#c0673c;--warn-bg:rgba(192,103,60,0.12);
+  --info:#4d93c2;--info-bg:rgba(77,147,194,0.12);
+  --shadow:0 2px 8px rgba(0,0,0,0.30);--shadow-lg:0 8px 24px rgba(0,0,0,0.40);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+body{width:360px;min-height:500px;max-height:600px;overflow:hidden;
+  background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:13px;line-height:1.5;display:flex;flex-direction:column}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+input{font:inherit;color:inherit}
+svg{display:block;flex-shrink:0}
+
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.hdr-brand{display:flex;align-items:center;gap:8px}
+.hdr-title{font-size:13px;font-weight:600;letter-spacing:.01em}
+.hdr-sub{font-size:11px;color:var(--muted)}
+.hdr-ctrl{display:flex;gap:4px}
+.icon-btn{width:26px;height:26px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);
+  transition:background var(--tr),color var(--tr)}
+.icon-btn:hover{background:var(--border-s);color:var(--text)}
+
+/* Nav */
+.nav{display:flex;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.nav-t{flex:1;padding:7px 0;font-size:11px;font-weight:500;color:var(--muted);
+  border:none;background:none;border-bottom:2px solid transparent;
+  transition:color var(--tr),border-color var(--tr);
+  display:flex;align-items:center;justify-content:center;gap:5px}
+.nav-t.active{color:var(--primary);border-bottom-color:var(--primary)}
+.nav-t:hover:not(.active){color:var(--text)}
+
+/* Panels */
+.panels{flex:1;overflow-y:auto}
+.panel{display:none;padding:12px 14px;flex-direction:column;gap:10px}
+.panel.active{display:flex}
+
+/* Toggle row */
+.tog-row{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+.tog-info{display:flex;flex-direction:column;gap:1px}
+.tog-label{font-size:12px;font-weight:600}
+.tog-desc{font-size:11px;color:var(--muted)}
+.sw{position:relative;width:32px;height:18px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw-track{position:absolute;inset:0;border-radius:var(--r-pill);background:var(--faint);
+  cursor:pointer;transition:background var(--tr)}
+.sw input:checked+.sw-track{background:var(--primary)}
+.sw-thumb{position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;
+  background:#fff;pointer-events:none;transition:transform var(--tr);
+  box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+.sw input:checked~.sw-thumb{transform:translateX(14px)}
+
+/* Site cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+  transition:border-color var(--tr)}
+.card:hover{border-color:var(--border-s)}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 8px}
+.card-name{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600}
+.plat-icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0}
+.plat-icon.bili{background:#00a1d6}
+.plat-icon.dy{background:#fe2c55}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;
+  border-radius:var(--r-pill);font-size:10px;font-weight:600;letter-spacing:.03em;
+  transition:background var(--tr),color var(--tr)}
+.bdot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.badge.ok{color:var(--success);background:var(--success-bg)}
+.badge.fail{color:var(--error);background:var(--error-bg)}
+.badge.idle{color:var(--muted);background:var(--border)}
+.badge.loading{color:var(--info);background:var(--info-bg)}
+.card-div{height:1px;background:var(--border);margin:0 12px}
+.card-act{display:flex;gap:6px;padding:8px 12px}
+.btn{font-size:11px;font-weight:600;padding:5px 10px;border-radius:var(--r-sm);
+  border:1px solid transparent;display:inline-flex;align-items:center;gap:5px;
+  transition:background var(--tr),color var(--tr),border-color var(--tr),opacity var(--tr);
+  white-space:nowrap}
+.btn:disabled{opacity:.4;pointer-events:none}
+.btn-p{background:var(--primary);color:#fff}
+.btn-p:hover{background:var(--primary-h)}
+.btn-s{background:transparent;color:var(--primary);border-color:currentColor}
+.btn-s:hover{background:var(--primary-dim)}
+.btn-g{background:transparent;color:var(--muted);border-color:var(--border)}
+.btn-g:hover{background:var(--surface-2);color:var(--text)}
+.chips{display:flex;gap:4px;flex-wrap:wrap;padding:0 12px 8px}
+.chip{font-size:10px;padding:1px 6px;border-radius:var(--r-pill);
+  background:var(--success-bg);color:var(--success);font-family:var(--mono)}
+.chip.miss{background:var(--error-bg);color:var(--error)}
+.card-foot{padding:6px 12px 9px;font-size:11px;color:var(--muted);
+  display:flex;align-items:center;gap:5px;min-height:28px}
+.card-foot.ok{color:var(--success)}
+.card-foot.fail{color:var(--error)}
+.card-foot.warn{color:var(--warn)}
+
+/* Cookie table */
+.seg{display:flex;gap:1px;background:var(--surface-2);border-radius:var(--r);padding:2px}
+.seg-b{flex:1;text-align:center;padding:5px 8px;font-size:11px;font-weight:500;
+  border-radius:calc(var(--r) - 2px);color:var(--muted);transition:background var(--tr),color var(--tr)}
+.seg-b.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.ck-tbl{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.ck-hd{display:grid;grid-template-columns:96px 1fr 66px 46px;padding:5px 10px;
+  font-size:10px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);
+  text-transform:uppercase;letter-spacing:.05em;background:var(--surface-2)}
+.ck-row{display:grid;grid-template-columns:96px 1fr 66px 46px;padding:5px 10px;
+  font-size:11px;font-family:var(--mono);border-bottom:1px solid var(--border);align-items:center}
+.ck-row:last-child{border-bottom:none}
+.ck-row:hover{background:var(--surface-2)}
+.ck-row .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ck-row .vl{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ck-row .dm{color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.ck-row .ex{color:var(--faint);font-size:10px;text-align:right}
+.ck-scroll{max-height:220px;overflow-y:auto}
+.hbar{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;
+  font-size:11px;border-top:1px solid var(--border);background:var(--surface-2)}
+.h-ok{color:var(--success);display:flex;align-items:center;gap:4px;font-weight:600}
+.h-warn{color:var(--warn);display:flex;align-items:center;gap:4px;font-weight:600}
+.empty{text-align:center;padding:32px 16px;color:var(--muted);
+  display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px}
+
+/* Settings */
+.fg{display:flex;flex-direction:column;gap:5px}
+.fl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fi{padding:7px 10px;border-radius:var(--r-sm);font-size:12px;
+  background:var(--surface);border:1px solid var(--border-s);color:var(--text);
+  transition:border-color var(--tr),box-shadow var(--tr);width:100%}
+.fi:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-dim)}
+.fh{font-size:11px;color:var(--muted)}
+.fh code{font-family:var(--mono);background:var(--surface-2);
+  padding:1px 4px;border-radius:3px;font-size:10px;color:var(--primary)}
+.save-btn{background:var(--primary);color:#fff;border:none;padding:8px 12px;
+  border-radius:var(--r);font-size:12px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:background var(--tr)}
+.save-btn:hover{background:var(--primary-h)}
+.kv-grid{display:flex;flex-direction:column;gap:5px}
+.kv-row{display:flex;align-items:center;justify-content:space-between;
+  padding:7px 10px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-sm);font-size:11px}
+.kv-nm{font-weight:600}
+.kv-mt{color:var(--muted);font-size:10px;margin-top:1px}
+.info-box{background:var(--info-bg);border:1px solid rgba(77,147,194,.2);
+  border-radius:var(--r);padding:10px 12px;font-size:11px;line-height:1.6}
+.info-box strong{color:var(--info)}
+
+/* Log */
+.log-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  overflow:hidden;flex:1;display:flex;flex-direction:column;max-height:320px}
+.log-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:6px 10px;border-bottom:1px solid var(--border);background:var(--surface-2);
+  font-size:11px;font-weight:600;color:var(--muted)}
+.log-body{flex:1;overflow-y:auto;padding:4px 0}
+.log-e{display:grid;grid-template-columns:52px 36px 1fr;gap:0 6px;
+  padding:3px 10px;font-family:var(--mono);font-size:11px}
+.log-e:hover{background:var(--surface-2)}
+.log-ts{color:var(--faint)}
+.log-lv{font-weight:700;font-size:10px;text-align:center}
+.log-lv.ok{color:var(--success)}.log-lv.err{color:var(--error)}
+.log-lv.info{color:var(--info)}.log-lv.warn{color:var(--warn)}
+.log-msg{color:var(--text);word-break:break-all;line-height:1.4}
+
+/* Toast */
+.toast{position:fixed;bottom:12px;left:50%;transform:translateX(-50%) translateY(12px);
+  background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--r);
+  padding:7px 14px;font-size:12px;font-weight:500;box-shadow:var(--shadow-lg);
+  opacity:0;transition:transform .25s ease,opacity .25s ease;
+  pointer-events:none;white-space:nowrap;z-index:99}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast.ok{color:var(--success);border-color:var(--success)}
+.toast.err{color:var(--error);border-color:var(--error)}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{width:11px;height:11px;border:1.5px solid var(--border-s);border-top-color:var(--primary);
+  border-radius:50%;animation:spin .65s linear infinite;display:inline-block;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-brand">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect x="3" y="9" width="14" height="9" rx="2" stroke="var(--primary)" stroke-width="1.5"/>
+      <path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="10" cy="13.5" r="1.2" fill="var(--primary)"/>
+    </svg>
+    <div>
+      <div class="hdr-title">Cookie 自动登录</div>
+      <div class="hdr-sub">B站 · 抖音</div>
+    </div>
+  </div>
+  <div class="hdr-ctrl">
+    <button class="icon-btn" id="kvRefresh" title="刷新 KV 状态">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <button class="icon-btn" id="themeBtn" title="切换主题">
+      <svg id="themeIco" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<nav class="nav">
+  <button class="nav-t active" data-tab="main">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>登录
+  </button>
+  <button class="nav-t" data-tab="cookies">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>Cookie
+  </button>
+  <button class="nav-t" data-tab="settings">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>设置
+  </button>
+  <button class="nav-t" data-tab="log">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>日志
+  </button>
+</nav>
+
+<div class="panels">
+
+<!-- MAIN -->
+<div class="panel active" id="tab-main">
+  <div class="tog-row">
+    <div class="tog-info">
+      <span class="tog-label">访问时自动检测</span>
+      <span class="tog-desc">进入网站时自动提取或恢复登录</span>
+    </div>
+    <label class="sw">
+      <input type="checkbox" id="autoToggle" checked>
+      <span class="sw-track"></span><span class="sw-thumb"></span>
+    </label>
+  </div>
+
+  <!-- Bilibili -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-name">
+        <div class="plat-icon bili">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3h13A1.5 1.5 0 0 1 20 4.5v15a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5zM8.5 10a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm7 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
+        </div>哔哩哔哩
+      </div>
+      <span class="badge idle" id="bili-badge"><span class="bdot"></span><span id="bili-bt">检测中</span></span>
+    </div>
+    <div class="card-div"></div>
+    <div class="card-act">
+      <button class="btn btn-p" id="bili-auto">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>自动同步
+      </button>
+      <button class="btn btn-s" id="bili-ext">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>提取上传
+      </button>
+      <button class="btn btn-g" id="bili-rst">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>恢复
+      </button>
+    </div>
+    <div class="chips" id="bili-chips" style="display:none"></div>
+    <div class="card-foot" id="bili-foot">等待操作</div>
+  </div>
+
+  <!-- Douyin -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-name">
+        <div class="plat-icon dy">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.34 6.34 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.76a4.86 4.86 0 0 1-1.01-.07z"/></svg>
+        </div>抖音
+      </div>
+      <span class="badge idle" id="dy-badge"><span class="bdot"></span><span id="dy-bt">检测中</span></span>
+    </div>
+    <div class="card-div"></div>
+    <div class="card-act">
+      <button class="btn btn-p" id="dy-auto">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>自动同步
+      </button>
+      <button class="btn btn-s" id="dy-ext">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>提取上传
+      </button>
+      <button class="btn btn-g" id="dy-rst">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>恢复
+      </button>
+    </div>
+    <div class="chips" id="dy-chips" style="display:none"></div>
+    <div class="card-foot" id="dy-foot">等待操作</div>
+  </div>
+</div>
+
+<!-- COOKIES -->
+<div class="panel" id="tab-cookies">
+  <div class="seg">
+    <button class="seg-b active" id="seg-bili">哔哩哔哩</button>
+    <button class="seg-b" id="seg-dy">抖音</button>
+  </div>
+  <div class="ck-tbl" id="ck-tbl">
+    <div class="empty">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      点击上方按钮查看 Cookie
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="panel" id="tab-settings">
+  <div class="fg">
+    <label class="fl">Worker URL</label>
+    <input type="url" class="fi" id="wUrl" placeholder="https://your-worker.workers.dev">
+    <div class="fh">Cloudflare Worker 部署地址</div>
+  </div>
+  <div class="fg">
+    <label class="fl">访问密钥</label>
+    <input type="password" class="fi" id="wSecret" placeholder="your-secret-key">
+    <div class="fh">与 Worker 环境变量 <code>SECRET</code> 保持一致</div>
+  </div>
+  <button class="save-btn" id="saveBtn">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+    保存配置
+  </button>
+  <div class="kv-grid">
+    <div class="kv-row">
+      <div><div class="kv-nm">哔哩哔哩 KV</div><div class="kv-mt" id="kv-bili-mt">—</div></div>
+      <span class="badge idle" id="kv-bili-b">未查询</span>
+    </div>
+    <div class="kv-row">
+      <div><div class="kv-nm">抖音 KV</div><div class="kv-mt" id="kv-dy-mt">—</div></div>
+      <span class="badge idle" id="kv-dy-b">未查询</span>
+    </div>
+  </div>
+  <div class="info-box">
+    <strong>KV 绑定说明</strong><br>
+    在 Dashboard 创建 KV 命名空间，绑定名称设为 <code>COOKIE_KV</code>，<br>
+    密钥通过 <code>wrangler secret put SECRET</code> 设置。
+  </div>
+</div>
+
+<!-- LOG -->
+<div class="panel" id="tab-log">
+  <div class="log-wrap">
+    <div class="log-hdr">
+      <span>操作日志</span>
+      <button class="icon-btn" id="clrLog" style="width:22px;height:22px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+</div>
+
+</div><!-- /panels -->
+<div class="toast" id="toast"></div>
+<script src="popup.js"></script>
+</body>
+</html>
